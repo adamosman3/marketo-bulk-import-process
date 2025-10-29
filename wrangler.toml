@@ -1,0 +1,10 @@
+# Top-level configuration
+name = "marketo-test-worker"
+main = "workers.js"
+compatibility_date = "2025-10-15"
+
+workers_dev = true
+
+[assets]
+directory = "./public/"
+binding = "ASSETS"
