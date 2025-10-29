@@ -1,5 +1,5 @@
 # Top-level configuration
-name = "marketo-test-worker"
+name = "marketo-bulk-import-process"
 main = "workers.js"
 compatibility_date = "2025-10-15"
 
