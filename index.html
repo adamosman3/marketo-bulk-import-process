@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline Conversion Spreadsheet Upload Process</title>
+    
+<script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for Cloudflare-inspired aesthetic enhancements */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc; /* Light grey background */
+            color: #333;
+        }
+        .card {
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            border-radius: 8px; /* Slightly less rounded corners */
+            border: 1px solid #e2e8f0; /* Lighter border */
+        }
+        .btn-primary {
+            transition: all 0.2s;
+            background-color: #f58220; /* Cloudflare orange */
+            color: white;
+            font-weight: 600;
+            border: none;
+        }
+        .btn-primary:hover {
+            background-color: #e07218; /* Slightly darker orange on hover */
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .log-success {
+            color: #4CAF50; /* Green */
+        }
+        .log-error {
+            color: #FF5252; /* Red */
+        }
+        .log-info {
+            color: #42A5F5; /* Blue */
+        }
+        /* Style for the button inside the file input */
+        input[type="file"]::file-selector-button {
+            background-color: #f58220;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 9999px; /* Full rounded for pill shape */
+            border: none;
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 600; /* font-semibold */
+            cursor: pointer;
+            margin-right: 1rem;
+            transition: all 0.2s;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: #e07218;
+        }
+        /* Override Tailwind focus ring to use brand color */
+        .focus\:ring-cloudflareOrange:focus {
+            --tw-ring-color: #f58220;
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+        }
+        .focus\:border-cloudflareOrange:focus {
+            border-color: #f58220;
+        }
+        .header-separator {
+            border-bottom: 5px solid #f58220;
+            margin-bottom: 2rem;
+            padding-bottom: 0;
+        }
+        .mapping-table {
+            background-color: #1f2937; /* Dark background for the mapping panel */
+        }
+        .mapping-table-header {
+            background-color: #374151;
+            color: #f9fafb;
+        }
+        .suggestion-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-top: none;
+            z-index: 10;
+        }
+        .suggestion-item:hover {
+            background-color: #e9ecef;
+            cursor: pointer;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cloudflareOrange: '#f58220',
+                        cloudflareDarkBlue: '#0f172a', /* A dark blue-black, similar to CF dashboard */
+                        cloudflareGray: '#6b7280',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="p-4 md:p-8 min-h-screen flex items-start justify-center bg-gray-50">
+
+    <div class="w-full max-w-4xl space-y-8">
+        <header class="text-center pb-0 header-separator">
+            <div class="mb-4">
+                <img src="https://cf-assets.www.cloudflare.com/dzlvafdwdttg/69wNwfiY5mFmgpd9eQFW6j/d5131c08085a977aa70f19e7aada3fa9/1pixel-down__1_.svg" 
+                     alt="Cloudflare Logo" 
+                     class="h-8 mx-auto" 
+                     onerror="this.style.display='none'">
+            </div>
+            <h1 class="text-3xl md:text-4xl font-extrabold text-cloudflareDarkBlue mb-6">Offline Conversion Spreadsheet Upload Process</h1>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-2 p-6 bg-white card">
+                <h2 class="text-2xl font-bold text-cloudflareOrange mb-4">Data Submission & Program Setup</h2>
+                <form id="importForm" class="space-y-6">
+                    
+                    <div class="relative">
+                        <label for="programName" class="block text-sm font-medium text-cloudflareGray">Marketo Program Name</label>
+                        <input type="text" id="programName" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-cloudflareOrange focus:border-cloudflareOrange" placeholder="e.g., Q4-Webinar-Import" autocomplete="off">
+                        <div id="programSuggestions" class="absolute w-full bg-white suggestion-list rounded-b-md shadow-lg hidden">
+                            <!-- Autocomplete suggestions will populate here -->
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Program Member Status will be set by the column **Import Program Status**.</p>
+                    </div>
+
+                    
+                    <div class="pt-4 border-t border-gray-200">
+                        <label for="csvFile" class="block text-sm font-medium text-cloudflareGray mb-2">Select CSV File</label>
+                        <input type="file" id="csvFile" accept=".csv" required class="block w-full text-sm text-cloudflareGray
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-full file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-cloudflareOrange file:text-white
+                            hover:file:bg-e07218 cursor-pointer">
+                    </div>
+
+                    
+                    <div id="mappingArea" class="hidden pt-6 border-t border-gray-200 space-y-3">
+                        <h3 class="text-lg font-semibold text-cloudflareDarkBlue">Field Mapping: CSV Column $\rightarrow$ Marketo Field</h3>
+                        <p id="mappingLoader" class="text-center text-gray-500 py-4 hidden">Loading Marketo Fields...</p>
+                    </div>
+
+                    
+                    <button type="submit" id="importButton" class="w-full flex justify-center py-3 px-4 rounded-lg shadow-md text-lg text-white btn-primary hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cloudflareOrange" disabled>
+                        Submit to Marketo
+                    </button>
+                </form>
+            </div>
+
+            
+            <div class="lg:col-span-1 p-6 bg-gray-900 card border-gray-700">
+                <h2 class="text-2xl font-bold text-gray-200 mb-4">Import Status Log</h2>
+                <div id="statusLog" class="h-64 overflow-y-auto bg-black text-sm p-3 rounded-lg text-gray-200 font-mono border border-gray-700 space-y-1">
+                    <p class="log-info">[10:20:00] App Ready. Select a CSV and fill out required fields.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="text/javascript">
+        // Global variables for UI elements
+        const importForm = document.getElementById('importForm');
+        const csvFile = document.getElementById('csvFile');
+        const importButton = document.getElementById('importButton');
+        const statusLog = document.getElementById('statusLog');
+        const programNameInput = document.getElementById('programName');
+        const programSuggestions = document.getElementById('programSuggestions');
+        const mappingArea = document.getElementById('mappingArea');
+        const mappingLoader = document.getElementById('mappingLoader');
+        
+        let MARKETO_FIELDS = []; // THIS ARRAY IS NOW DYNAMICALLY POPULATED BY THE WORKER
+        let debounceTimer;
+
+
+        /**
+         * Utility function to append messages to the status log.
+         * @param {string} message - The message content.
+         * @param {string} type - 'info', 'success', or 'error'.
+         */
+        function logStatus(message, type = 'info') {
+            const now = new Date();
+            const time = now.toTimeString().split(' ')[0];
+            const p = document.createElement('p');
+            p.textContent = `[${time}] ${message}`;
+
+            switch (type) {
+                case 'success':
+                    p.classList.add('log-success');
+                    break;
+                case 'error':
+                    p.classList.add('log-error');
+                    break;
+                case 'info':
+                default:
+                    p.classList.add('log-info');
+                    break;
+            }
+            statusLog.appendChild(p);
+            statusLog.scrollTop = statusLog.scrollHeight; // Auto-scroll to bottom
+        }
+
+        /**
+         * Generic Debounce helper function.
+         * @param {Function} func - The function to call.
+         * @param {number} delay - The delay in milliseconds.
+         */
+        const debounce = (func, delay) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(func, delay);
+        };
+
+        /**
+         * Fetches program suggestions from the Worker for autocomplete.
+         */
+        const fetchProgramSuggestions = async () => {
+            const query = programNameInput.value.trim();
+            if (query.length < 3) {
+                programSuggestions.classList.add('hidden');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/programs?search=${encodeURIComponent(query)}`);
+                if (!response.ok) throw new Error('Program search API failed.');
+                
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.programs.length > 0) {
+                    renderSuggestions(data.programs);
+                } else {
+                    programSuggestions.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Program search error:', error);
+                programSuggestions.classList.add('hidden');
+            }
+        };
+
+        /**
+         * Renders the fetched program names as clickable suggestions.
+         * @param {string[]} programs - Array of program names.
+         */
+        function renderSuggestions(programs) {
+            programSuggestions.innerHTML = '';
+            
+            programs.forEach(name => {
+                const div = document.createElement('div');
+                div.textContent = name;
+                div.classList.add('suggestion-item', 'px-3', 'py-2', 'text-sm', 'text-gray-700', 'border-b', 'border-gray-100');
+                div.addEventListener('click', () => {
+                    programNameInput.value = name;
+                    programSuggestions.classList.add('hidden');
+                    importButton.disabled = !importForm.checkValidity();
+                });
+                programSuggestions.appendChild(div);
+            });
+
+            programSuggestions.classList.remove('hidden');
+        }
+
+        // Program Name Autocomplete Listener
+        programNameInput.addEventListener('input', () => {
+            debounce(fetchProgramSuggestions, 300);
+            programSuggestions.classList.add('hidden'); // Hide until debounce is cleared
+        });
+        
+        // Hide suggestions when input loses focus (unless clicking a suggestion)
+        document.addEventListener('click', (event) => {
+            if (!programNameInput.contains(event.target) && !programSuggestions.contains(event.target)) {
+                programSuggestions.classList.add('hidden');
+            }
+        });
+
+
+        /**
+         * Fetches the official field list from Marketo via the secure Cloudflare Worker.
+         */
+        async function fetchMarketoFields() {
+            mappingLoader.textContent = 'Loading Marketo Fields...';
+            mappingLoader.classList.remove('hidden');
+            
+            logStatus('Fetching Marketo field metadata from Worker /api/fields...', 'info');
+            
+            try {
+                const response = await fetch('/api/fields', { method: 'GET' });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Worker field API failed: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.status === 'success' && Array.isArray(data.fields)) {
+                    // Prepend the required "Ignore" option
+                    MARKETO_FIELDS = [{ value: '', label: '-- Ignore Column --' }];
+                    
+                    // Map the Marketo API field names (value) to user-friendly labels (label)
+                    data.fields.forEach(field => {
+                        MARKETO_FIELDS.push({
+                            value: field.rest.name,
+                            label: `${field.displayName} (${field.rest.name})`
+                        });
+                    });
+                    
+                    logStatus(`Successfully loaded ${MARKETO_FIELDS.length - 1} Marketo fields.`, 'success');
+                    return true;
+                } else {
+                    throw new Error(`Marketo API did not return a valid field list.`);
+                }
+            } catch (error) {
+                logStatus(`CRITICAL ERROR: Failed to load Marketo fields. Import cannot proceed.`, 'error');
+                logStatus(error.message, 'error');
+                MARKETO_FIELDS = [];
+                return false;
+            } finally {
+                mappingLoader.classList.add('hidden');
+            }
+        }
+
+
+        // --- Event Listeners and Mapping Logic ---
+
+        // Check form validity whenever input changes
+        [csvFile, programNameInput].forEach(input => {
+            input.addEventListener('change', () => {
+                importButton.disabled = !importForm.checkValidity();
+            });
+            input.addEventListener('input', () => {
+                 importButton.disabled = !importForm.checkValidity();
+            });
+        });
+
+        /**
+         * Parses the CSV header, fetches fields, and renders the dynamic mapping UI.
+         */
+        csvFile.addEventListener('change', async () => {
+            mappingArea.innerHTML = '';
+            mappingArea.classList.add('hidden');
+            importButton.disabled = true;
+
+            const file = csvFile.files[0];
+            if (!file) return;
+            
+            // 1. Fetch Marketo fields first
+            const fieldsLoaded = await fetchMarketoFields();
+            if (!fieldsLoaded) {
+                return;
+            }
+
+            // 2. Read CSV header
+            mappingArea.innerHTML = `<p class="text-center text-gray-500 py-4">Reading CSV headers...</p>`;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const headerLine = event.target.result.split('\n')[0];
+                    // Simple CSV split
+                    const headers = headerLine.split(',').map(h => h.trim().replace(/['"]+/g, ''));
+
+                    renderMappingUI(headers);
+                    mappingArea.classList.remove('hidden');
+                    importButton.disabled = !importForm.checkValidity();
+
+                } catch (e) {
+                    logStatus('Error parsing CSV headers. Make sure it is a valid CSV format.', 'error');
+                    importButton.disabled = true;
+                }
+            };
+            // Read only the first part to get the header quickly
+            reader.readAsText(file.slice(0, 500));
+        });
+
+        /**
+         * Generates the HTML for the mapping table.
+         * @param {string[]} headers - Array of CSV column headers.
+         */
+        function renderMappingUI(headers) {
+            let html = `
+                <div class="mapping-table p-3 rounded-lg border border-gray-700">
+                    <div class="grid grid-cols-2 font-bold mapping-table-header pb-2 mb-2 p-2 rounded-t-lg">
+                        <div class="pl-2">CSV Column Name</div>
+                        <div>Map to Marketo Field</div>
+                    </div>
+                    <div id="mappingList" class="space-y-2">
+            `;
+
+            headers.forEach((header, index) => {
+                // Auto-match simple fields (e.g., 'Email' -> 'email', 'First Name' -> 'firstName')
+                const normalizedHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '');
+                
+                let defaultMarketoValue = '';
+                
+                // Attempt to find a direct match in the fetched field list
+                const matchedField = MARKETO_FIELDS.find(field => 
+                    field.value.toLowerCase() === normalizedHeader || 
+                    field.label.toLowerCase().includes(normalizedHeader)
+                );
+
+                if (matchedField) {
+                    defaultMarketoValue = matchedField.value;
+                }
+                
+                // If it's the email column, lock the selection to enforce the key
+                const isDisabled = (normalizedHeader === 'email') ? 'disabled' : '';
+                const isRequired = (normalizedHeader === 'email') ? 'required' : '';
+                
+                // Force email mapping if the header is 'email'
+                if (normalizedHeader === 'email') {
+                    defaultMarketoValue = 'email';
+                }
+
+                html += `
+                    <div class="grid grid-cols-2 items-center">
+                        <div class="text-sm font-medium text-gray-100 bg-gray-800 p-2 rounded-l-md">${header}</div>
+                        <select 
+                            data-csv-header="${header}"
+                            name="marketoField_${index}" 
+                            class="mapping-select mt-1 block w-full rounded-r-md border-gray-600 shadow-sm p-2 border bg-gray-800 text-gray-100 focus:ring-cloudflareOrange focus:border-cloudflareOrange"
+                            ${isDisabled} ${isRequired}
+                        >
+                `;
+                
+                MARKETO_FIELDS.forEach(field => {
+                    let selected = (field.value === defaultMarketoValue) ? 'selected' : '';
+                    
+                    // Prevent users from mapping a non-email column to the email Marketo field
+                    let emailDisabled = (normalizedHeader !== 'email' && field.value === 'email') ? 'disabled' : '';
+
+                    html += `<option value="${field.value}" ${selected} ${emailDisabled}>${field.label}</option>`;
+                });
+
+                html += `
+                        </select>
+                    </div>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+            mappingArea.innerHTML = html;
+        }
+
+
+        /**
+         * --- Core Import Logic ---
+         */
+        importForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            importButton.disabled = true;
+            importButton.textContent = 'Sending Data to Worker...';
+            logStatus('Starting secured import workflow...', 'info');
+
+            const file = csvFile.files[0];
+            // Worker Endpoint is now hardcoded for security
+            const workerEndpoint = '/api/import';
+            const programName = programNameInput.value.trim();
+            // Program Status is now removed from the client payload
+
+            if (!file) {
+                logStatus('No file selected.', 'error');
+                importButton.disabled = false;
+                importButton.textContent = 'Submit to Marketo';
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = async (event) => {
+                const csvContent = event.target.result;
+
+                // 1. Gather dynamic field mappings
+                const selectElements = document.querySelectorAll('#mappingList select.mapping-select');
+                const mappings = {};
+                let hasEmailMapping = false;
+                
+                selectElements.forEach(select => {
+                    // Only map columns that have a Marketo field selected (not -- Ignore Column --)
+                    if (select.value !== '') {
+                        mappings[select.dataset.csvHeader] = select.value;
+                        if (select.value === 'email') {
+                            hasEmailMapping = true;
+                        }
+                    }
+                });
+                
+                // 2. Critical Check: Ensure email column is mapped.
+                if (!hasEmailMapping) {
+                    // Error message remains technical as this is a strict Marketo requirement.
+                    logStatus('Validation Failed: The CSV must contain a column mapped to the Marketo "email" field.', 'error');
+                    importButton.disabled = false;
+                    importButton.textContent = 'Submit to Marketo';
+                    return;
+                }
+                
+                // 3. Update the CSV content to match the desired Marketo fields for Bulk API
+                try {
+                    const mappedCsvContent = transformCsvForMarketo(csvContent, mappings);
+                    
+                    // Send data to the Cloudflare Worker
+                    logStatus(`Sending ${file.name} with ${Object.keys(mappings).length} mapped fields to Worker...`, 'info');
+                    
+                    const response = await fetch(workerEndpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            csvContent: mappedCsvContent, // Send the transformed CSV
+                            lookupField: 'email', // Hardcoded
+                            programName: programName,
+                            fieldMapping: JSON.stringify(mappings) // Send mappings for logging/debugging on the worker
+                        })
+                    });
+
+                    // Handle Worker response
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Worker responded with status ${response.status}: ${errorText}`);
+                    }
+
+                    const result = await response.json();
+
+                    // Display the results returned by the Worker
+                    logStatus('Worker response received.', 'success');
+                    logStatus(`--- FINAL IMPORT SUMMARY ---`, 'info');
+                    logStatus(`Worker Job ID: ${result.jobId}`, 'info');
+                    logStatus(`Target Program: ${result.programName}`, 'info');
+                    logStatus(`Status: ${result.status}`, result.status === 'Completed' ? 'success' : 'error');
+                    logStatus(`Successes: ${result.successRows}`, 'success');
+                    if (result.errorRows > 0) {
+                        logStatus(`Errors: ${result.errorRows}`, 'error');
+                        logStatus(`Check Marketo Bulk Import Log for full details.`, 'error');
+                    } else {
+                        logStatus('No Errors Reported.', 'success');
+                    }
+
+
+                } catch (error) {
+                    logStatus(`Processing Error: ${error.message}`, 'error');
+                    logStatus('Check console for details on CSV transformation failure.', 'error');
+                } finally {
+                    importButton.disabled = false;
+                    importButton.textContent = 'Submit to Marketo';
+                }
+            };
+
+            reader.onerror = () => {
+                logStatus('Error reading file locally.', 'error');
+                importButton.disabled = false;
+                importButton.textContent = 'Submit to Marketo';
+            };
+
+            reader.readAsText(file); // Read the full CSV content as text
+        });
+        
+        /**
+         * Transforms the raw CSV content based on user mappings.
+         * @param {string} rawCsv - The original CSV content.
+         * @param {Object<string, string>} mappings - Map of CSV_Header -> Marketo_Field_Name.
+         * @returns {string} The transformed CSV content ready for Marketo.
+         */
+        function transformCsvForMarketo(rawCsv, mappings) {
+            const lines = rawCsv.trim().split('\n');
+            if (lines.length === 0) throw new Error("CSV file is empty.");
+            
+            const originalHeaders = lines[0].split(',').map(h => h.trim().replace(/['"]+/g, ''));
+            const dataLines = lines.slice(1);
+            
+            const newHeaders = [];
+            const headerIndicesToKeep = [];
+
+            // 1. Determine which original columns to keep and what their new headers should be
+            originalHeaders.forEach((header, index) => {
+                const marketoField = mappings[header];
+                if (marketoField) {
+                    // Only keep mapped fields
+                    newHeaders.push(marketoField);
+                    headerIndicesToKeep.push(index);
+                }
+            });
+            
+            if (!newHeaders.includes('email')) {
+                throw new Error("Transformed CSV is missing the required 'email' column.");
+            }
+
+            // 2. Build the new CSV content
+            let transformedCsv = newHeaders.join(',') + '\n';
+            
+            dataLines.forEach(line => {
+                const columns = line.split(',');
+                const newRow = [];
+                
+                headerIndicesToKeep.forEach(index => {
+                    if (columns[index] !== undefined) {
+                        newRow.push(columns[index].trim());
+                    } else {
+                        newRow.push(''); // Handle ragged rows gracefully
+                    }
+                });
+                
+                if (newRow.length > 0) {
+                    transformedCsv += newRow.join(',') + '\n';
+                }
+            });
+
+            return transformedCsv.trim();
+        }
+
+    </script>
+</body>
+</html>
